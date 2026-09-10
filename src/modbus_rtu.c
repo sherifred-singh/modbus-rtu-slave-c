@@ -36,7 +36,7 @@ size_t modbus_slave_process_frame(modbus_slave_t *slave,
         return 0;
     }
 
-    /* Check Slave Address (Ignore frames for other nodes or broadcasts for now) */
+    /* Check Slave Address */
     if (rx_frame[0] != slave->slave_address) {
         return 0;
     }
@@ -45,7 +45,7 @@ size_t modbus_slave_process_frame(modbus_slave_t *slave,
     uint16_t calculated_crc = modbus_crc16(rx_frame, rx_len - 2);
     uint16_t received_crc = (uint16_t)(rx_frame[rx_len - 2] | (rx_frame[rx_len - 1] << 8));
     if (calculated_crc != received_crc) {
-        return 0; /* Drop frame with invalid CRC silently */
+        return 0; /* Drop frame with invalid CRC */
     }
 
     uint8_t function_code = rx_frame[1];
@@ -80,6 +80,36 @@ size_t modbus_slave_process_frame(modbus_slave_t *slave,
         return idx;
     }
 
+    /* Function 04: Read Input Registers */
+    if (function_code == MODBUS_FC_READ_INPUT_REGISTERS) {
+        uint16_t start_addr = (uint16_t)((rx_frame[2] << 8) | rx_frame[3]);
+        uint16_t reg_count  = (uint16_t)((rx_frame[4] << 8) | rx_frame[5]);
+
+        if (reg_count < 1 || reg_count > 125) {
+            return build_exception(slave->slave_address, function_code, MODBUS_EX_ILLEGAL_DATA_VALUE, tx_frame);
+        }
+        if ((start_addr + reg_count) > slave->input_register_count) {
+            return build_exception(slave->slave_address, function_code, MODBUS_EX_ILLEGAL_DATA_ADDRESS, tx_frame);
+        }
+
+        uint8_t byte_count = (uint8_t)(reg_count * 2);
+        tx_frame[0] = slave->slave_address;
+        tx_frame[1] = function_code;
+        tx_frame[2] = byte_count;
+
+        size_t idx = 3;
+        for (uint16_t i = 0; i < reg_count; i++) {
+            uint16_t val = slave->input_registers[start_addr + i];
+            tx_frame[idx++] = (uint8_t)((val >> 8) & 0xFF);
+            tx_frame[idx++] = (uint8_t)(val & 0xFF);
+        }
+
+        uint16_t crc = modbus_crc16(tx_frame, idx);
+        tx_frame[idx++] = (uint8_t)(crc & 0xFF);
+        tx_frame[idx++] = (uint8_t)((crc >> 8) & 0xFF);
+        return idx;
+    }
+
     /* Function 06: Write Single Register */
     if (function_code == MODBUS_FC_WRITE_SINGLE_REGISTER) {
         uint16_t reg_addr = (uint16_t)((rx_frame[2] << 8) | rx_frame[3]);
@@ -91,7 +121,6 @@ size_t modbus_slave_process_frame(modbus_slave_t *slave,
 
         slave->holding_registers[reg_addr] = reg_val;
 
-        /* Echo request as response */
         for (size_t i = 0; i < 6; i++) {
             tx_frame[i] = rx_frame[i];
         }
@@ -101,6 +130,35 @@ size_t modbus_slave_process_frame(modbus_slave_t *slave,
         return 8;
     }
 
-    /* Unsupported Function */
+    /* Function 16 (0x10): Write Multiple Registers */
+    if (function_code == MODBUS_FC_WRITE_MULTIPLE_REGISTERS) {
+        uint16_t start_addr = (uint16_t)((rx_frame[2] << 8) | rx_frame[3]);
+        uint16_t reg_count  = (uint16_t)((rx_frame[4] << 8) | rx_frame[5]);
+        uint8_t byte_count  = rx_frame[6];
+
+        if (reg_count < 1 || reg_count > 123 || byte_count != (reg_count * 2)) {
+            return build_exception(slave->slave_address, function_code, MODBUS_EX_ILLEGAL_DATA_VALUE, tx_frame);
+        }
+        if ((start_addr + reg_count) > slave->holding_register_count) {
+            return build_exception(slave->slave_address, function_code, MODBUS_EX_ILLEGAL_DATA_ADDRESS, tx_frame);
+        }
+
+        size_t idx = 7;
+        for (uint16_t i = 0; i < reg_count; i++) {
+            uint16_t val = (uint16_t)((rx_frame[idx] << 8) | rx_frame[idx + 1]);
+            slave->holding_registers[start_addr + i] = val;
+            idx += 2;
+        }
+
+        /* Normal response: Echo Slave, FC, Start Addr, Reg Count + CRC */
+        for (size_t i = 0; i < 6; i++) {
+            tx_frame[i] = rx_frame[i];
+        }
+        uint16_t crc = modbus_crc16(tx_frame, 6);
+        tx_frame[6] = (uint8_t)(crc & 0xFF);
+        tx_frame[7] = (uint8_t)((crc >> 8) & 0xFF);
+        return 8;
+    }
+
     return build_exception(slave->slave_address, function_code, MODBUS_EX_ILLEGAL_FUNCTION, tx_frame);
 }
