@@ -38,3 +38,4 @@ size_t modbus_slave_process_frame(modbus_slave_t *slave,
                                   uint8_t *tx_frame, size_t tx_max_len);
 
 #endif /* MODBUS_RTU_H */
+/* Industrial Modbus-RTU Slave Protocol Stack - Deterministic Frame Processing */
