@@ -1,6 +1,6 @@
 ﻿# 📡 Industrial Modbus-RTU Slave Protocol Stack in C
 
-[![C/C++ Modbus CI](https://github.com/Sherifred123/modbus-rtu-slave-c/actions/workflows/ci.yml/badge.svg)](https://github.com/Sherifred123/modbus-rtu-slave-c/actions/workflows/ci.yml)
+[![C/C++ Modbus CI](https://github.com/sherifred-singh/modbus-rtu-slave-c/actions/workflows/ci.yml/badge.svg)](https://github.com/sherifred-singh/modbus-rtu-slave-c/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 A lightweight, deterministic **Modbus-RTU Slave Protocol Stack** written in pure C99 for **Microchip PIC18**, **STM32**, and **ESP32** industrial controllers communicating over **RS-485** / UART.
@@ -43,3 +43,4 @@ make
 
 ## 📜 License
 Released under the [MIT License](LICENSE). Designed and maintained by **Sherifred Singh**.
+
